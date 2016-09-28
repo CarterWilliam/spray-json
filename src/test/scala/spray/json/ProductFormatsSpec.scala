@@ -150,7 +150,7 @@ class ProductFormatsSpec extends Specification {
         implicit val boxFormat = jsonFormat1(Box[Int])
       }
       import BoxProtocol._
-      Box(42).toJson === JsObject(Map("a" -> JsNumber(42)))
+      Box(42).toJson === JsObject("a" -> JsNumber(42))
     }
   }
 
@@ -200,7 +200,7 @@ class ProductFormatsSpec extends Specification {
     import TestProtocol1._
     val json = """{"ü$bavf$u56ú$":true,"=><+-*/!@#%^&~?|":1.0,"foo-bar!":42,"-x-":26,"User ID":"Karl"}"""
     "produce the correct JSON" in {
-      TestMangled(42, "Karl", true, 26, 1.0f).toJson.compactPrint === json
+      TestMangled(42, "Karl", true, 26, 1.0f).toJson === json.parseJson
     }
     "convert a JsObject to the respective case class instance" in {
       json.parseJson.convertTo[TestMangled] === TestMangled(42, "Karl", true, 26, 1.0f)

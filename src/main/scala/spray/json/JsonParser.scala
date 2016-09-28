@@ -16,7 +16,10 @@
 
 package spray.json
 
+import com.typesafe.config.{Config, ConfigFactory}
 import scala.annotation.{switch, tailrec}
+import scala.collection.immutable.ListMap
+import scala.util.Try
 import java.lang.{StringBuilder => JStringBuilder}
 import java.nio.{CharBuffer, ByteBuffer}
 import java.nio.charset.Charset
@@ -25,14 +28,17 @@ import java.nio.charset.Charset
  * Fast, no-dependency parser for JSON as defined by http://tools.ietf.org/html/rfc4627.
  */
 object JsonParser {
-  def apply(input: ParserInput): JsValue = new JsonParser(input).parseJsValue()
+  def apply(input: ParserInput, configuration: Config = ConfigFactory.load): JsValue = new JsonParser(input, configuration).parseJsValue()
 
   class ParsingException(val summary: String, val detail: String = "")
     extends RuntimeException(if (summary.isEmpty) detail else if (detail.isEmpty) summary else summary + ":" + detail)
 }
 
-class JsonParser(input: ParserInput) {
+class JsonParser(input: ParserInput, configuration: Config) {
   import JsonParser.ParsingException
+
+  val preserveObjectOrder: Boolean =
+    Try(configuration.getBoolean("spray-json.parsing.preserve-object-order")).getOrElse(false)
 
   private[this] val sb = new JStringBuilder
   private[this] var cursorChar: Char = input.nextChar()
@@ -73,7 +79,7 @@ class JsonParser(input: ParserInput) {
   private def `object`(): Unit = {
     ws()
     jsValue = if (cursorChar != '}') {
-      @tailrec def members(map: Map[String, JsValue]): Map[String, JsValue] = {
+      @tailrec def members(map: scala.collection.Map[String, JsValue]): scala.collection.Map[String, JsValue] = {
         `string`()
         require(':')
         ws()
@@ -82,8 +88,11 @@ class JsonParser(input: ParserInput) {
         val nextMap = map.updated(key, jsValue)
         if (ws(',')) members(nextMap) else nextMap
       }
-      var map = Map.empty[String, JsValue]
-      map = members(map)
+      val map: Map[String, JsValue] = if (preserveObjectOrder) {
+        members(ListMap.empty[String, JsValue]).toMap
+      } else {
+        members(Map.empty[String, JsValue]).toMap
+      }
       require('}')
       JsObject(map)
     } else {
